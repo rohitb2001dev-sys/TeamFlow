@@ -8,6 +8,7 @@ const {
   updateTask,
   updateTaskStatus,
   deleteTask,
+  assignTask
 } = require("../controllers/task.controller");
 
 const { protect } = require("../middleware/auth.middleware");
@@ -34,6 +35,13 @@ router.get(
   "/:id",
   protect,
   getTaskById
+);
+
+router.patch(
+  "/:id/assign",
+  protect,
+  authorizeRoles(USER_ROLE.ADMIN, USER_ROLE.MANAGER),
+  assignTask
 );
 
 // Update task

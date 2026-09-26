@@ -1,6 +1,10 @@
 const Project = require("../models/Project");
 const getNextId = require("../utils/getNextId");
+const createActivityLog = require("../utils/createActivityLog");
 
+const {
+  ACTIVITY_ACTION,
+} = require("../constants/activity.constants");
 const createProject = async (req, res) => {
   try {
     const {
@@ -221,7 +225,12 @@ const addProjectMember = async (req, res) => {
     project.members.push(employee._id);
 
     await project.save();
-
+    await createActivityLog({
+      action: ACTIVITY_ACTION.PROJECT_MEMBER_ADDED,
+      project: project._id,
+      performedBy: req.user.userId,
+      newValue: employee._id,
+    });
     const updatedProject = await Project.findById(project._id)
       .populate("owner", "id name email role")
       .populate("members", "id name email role");
@@ -276,7 +285,12 @@ const removeProjectMember = async (req, res) => {
         message: "Employee is not a member of this project",
       });
     }
-
+    await createActivityLog({
+      action: ACTIVITY_ACTION.PROJECT_MEMBER_REMOVED,
+      project: project._id,
+      performedBy: req.user.userId,
+      previousValue: employee._id,
+    });
     project.members = project.members.filter(
       (member) => member.toString() !== employee._id.toString()
     );

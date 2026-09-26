@@ -7,7 +7,10 @@ const {
   TASK_STATUS,
   TASK_PRIORITY,
 } = require("../constants/task.constants");
-
+const createActivityLog = require("../utils/createActivityLog");
+const {
+  ACTIVITY_ACTION,
+} = require("../constants/activity.constants");
 const createTask = async (req, res) => {
   try {
     const {
@@ -86,7 +89,16 @@ const createTask = async (req, res) => {
       dueDate,
       estimatedHours,
     });
-
+    await createActivityLog({
+      action: ACTIVITY_ACTION.TASK_CREATED,
+      task: task._id,
+      project: projectData._id,
+      performedBy: req.user.userId,
+      newValue: {
+        title: task.title,
+        assignedTo: task.assignedTo,
+      },
+    });
     const populatedTask = await Task.findById(task._id)
       .populate("project", "id name status")
       .populate("assignedTo", "id name email role")
@@ -184,6 +196,18 @@ const updateTask = async (req, res) => {
       });
     }
 
+    const { role } = req.user;
+
+    // Only ADMIN and MANAGER can update task details
+    if (
+      role !== USER_ROLE.ADMIN &&
+      role !== USER_ROLE.MANAGER
+    ) {
+      return res.status(403).json({
+        message: "You do not have permission to update this task",
+      });
+    }
+
     const allowedFields = [
       "title",
       "description",
@@ -258,11 +282,18 @@ const updateTaskStatus = async (req, res) => {
         });
       }
     }
-
+    const previousStatus = task.status;
     task.status = status;
 
     await task.save();
-
+    await createActivityLog({
+      action: ACTIVITY_ACTION.TASK_STATUS_CHANGED,
+      task: task._id,
+      project: task.project,
+      performedBy: req.user.userId,
+      previousValue: previousStatus,
+      newValue: status,
+    });
     const updatedTask = await Task.findById(task._id)
       .populate("project", "id name status")
       .populate("assignedTo", "id name email role")
@@ -283,22 +314,144 @@ const updateTaskStatus = async (req, res) => {
 
 const deleteTask = async (req, res) => {
   try {
-    const task = await Task.findOneAndDelete({
+    const task = await Task.findOne({
       id: Number(req.params.id),
-      createdBy: req.user.userId,
     });
 
     if (!task) {
       return res.status(404).json({
-        message: "Task not found or you are not allowed to delete it",
+        message: "Task not found",
       });
     }
+
+    const { role } = req.user;
+
+    // Only ADMIN and MANAGER can delete tasks
+    if (
+      role !== USER_ROLE.ADMIN &&
+      role !== USER_ROLE.MANAGER
+    ) {
+      return res.status(403).json({
+        message: "You do not have permission to delete this task",
+      });
+    }
+    await createActivityLog({
+      action: ACTIVITY_ACTION.TASK_DELETED,
+      task: task._id,
+      project: task.project,
+      performedBy: req.user.userId,
+      previousValue: {
+        title: task.title,
+        status: task.status,
+        assignedTo: task.assignedTo,
+      },
+    });
+    await Task.deleteOne({
+      _id: task._id,
+    });
 
     return res.status(200).json({
       message: "Task deleted successfully",
     });
   } catch (error) {
     console.error("Delete task error:", error);
+
+    return res.status(500).json({
+      message: "Something went wrong",
+    });
+  }
+};
+
+const assignTask = async (req, res) => {
+  try {
+    const { userId } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({
+        message: "User ID is required",
+      });
+    }
+
+    // Find task using numeric task ID
+    const task = await Task.findOne({
+      id: Number(req.params.id),
+    });
+
+    if (!task) {
+      return res.status(404).json({
+        message: "Task not found",
+      });
+    }
+
+    // Find employee using numeric user ID
+    const employee = await User.findOne({
+      id: Number(userId),
+      role: USER_ROLE.EMPLOYEE,
+      isActive: true,
+    });
+
+    if (!employee) {
+      return res.status(404).json({
+        message: "Active employee not found",
+      });
+    }
+
+    // Get project
+    const project = await Project.findById(task.project);
+
+    if (!project) {
+      return res.status(404).json({
+        message: "Project not found",
+      });
+    }
+
+    // Verify employee belongs to project
+    const isMember = project.members.some(
+      (member) =>
+        member.toString() === employee._id.toString()
+    );
+
+    if (!isMember) {
+      return res.status(400).json({
+        message: "Employee is not a member of this project",
+      });
+    }
+
+    // Save previous assignee for audit information
+    const previousAssignee = task.assignedTo;
+    task.assignedTo = employee._id;
+    await task.save();
+    await createActivityLog({
+      action: previousAssignee
+        ? ACTIVITY_ACTION.TASK_REASSIGNED
+        : ACTIVITY_ACTION.TASK_ASSIGNED,
+      task: task._id,
+      project: task.project,
+      performedBy: req.user.userId,
+      previousValue: previousAssignee,
+      newValue: employee._id,
+    });
+
+    const updatedTask = await Task.findById(task._id)
+      .populate("project", "id name status")
+      .populate("assignedTo", "id name email role")
+      .populate("createdBy", "id name email role");
+
+    return res.status(200).json({
+      message: previousAssignee
+        ? "Task reassigned successfully"
+        : "Task assigned successfully",
+
+      task: updatedTask,
+
+      audit: {
+        previousAssignee,
+        newAssignee: employee._id,
+        assignedBy: req.user.userId,
+      },
+    });
+  } catch (error) {
+    console.error("Assign task error:", error);
 
     return res.status(500).json({
       message: "Something went wrong",
@@ -313,4 +466,5 @@ module.exports = {
   updateTask,
   updateTaskStatus,
   deleteTask,
+  assignTask
 };
