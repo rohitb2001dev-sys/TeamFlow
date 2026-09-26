@@ -1,0 +1,18 @@
+const PROJECT_STATUS = Object.freeze({
+  PLANNED: "PLANNED",
+  IN_PROGRESS: "IN_PROGRESS",
+  ON_HOLD: "ON_HOLD",
+  COMPLETED: "COMPLETED",
+});
+
+const PROJECT_PRIORITY = Object.freeze({
+  LOW: "LOW",
+  MEDIUM: "MEDIUM",
+  HIGH: "HIGH",
+  URGENT: "URGENT",
+});
+
+module.exports = {
+  PROJECT_STATUS,
+  PROJECT_PRIORITY,
+};

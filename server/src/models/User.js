@@ -1,7 +1,14 @@
 const mongoose = require("mongoose");
+const { USER_ROLE } = require("../constants/user.constants");
 
 const userSchema = new mongoose.Schema(
   {
+    id: {
+      type: Number,
+      unique: true,
+      index: true,
+    },
+
     name: {
       type: String,
       required: true,
@@ -24,8 +31,8 @@ const userSchema = new mongoose.Schema(
 
     role: {
       type: String,
-      enum: ["ADMIN", "MANAGER", "EMPLOYEE"],
-      default: "EMPLOYEE",
+      enum: Object.values(USER_ROLE),
+      default: USER_ROLE.EMPLOYEE,
     },
 
     avatar: {

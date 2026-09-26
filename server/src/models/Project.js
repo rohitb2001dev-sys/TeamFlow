@@ -2,6 +2,12 @@ const mongoose = require("mongoose");
 
 const projectSchema = new mongoose.Schema(
   {
+    id: {
+      type: Number,
+      unique: true,
+      index: true,
+    },
+
     name: {
       type: String,
       required: true,

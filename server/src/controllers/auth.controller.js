@@ -1,6 +1,6 @@
 const bcrypt = require("bcryptjs");
 const User = require("../models/User");
-
+const getNextId = require("../utils/getNextId");
 const register = async (req, res) => {
   try {
     const { name, email, password, role } = req.body;
@@ -25,9 +25,10 @@ const register = async (req, res) => {
 
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
-
+    const userId = await getNextId("user");
     // Create user
     const user = await User.create({
+      id: userId,
       name,
       email: email.toLowerCase(),
       password: hashedPassword,
@@ -37,7 +38,7 @@ const register = async (req, res) => {
     return res.status(201).json({
       message: "User registered successfully",
       user: {
-        id: user._id,
+        id: user.id,
         name: user.name,
         email: user.email,
         role: user.role,
@@ -92,6 +93,7 @@ const login = async (req, res) => {
     const token = jwt.sign(
       {
         userId: user._id,
+        id: user.id,
         role: user.role,
       },
       process.env.JWT_SECRET,
@@ -104,7 +106,7 @@ const login = async (req, res) => {
       message: "Login successful",
       token,
       user: {
-        id: user._id,
+        id: user.id,
         name: user.name,
         email: user.email,
         role: user.role,
